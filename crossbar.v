@@ -1,3 +1,50 @@
+/*
+ * crossbar.v
+ *
+ * Registered five-port switch: North, South, East, West and Local.
+ * Supports ONE selected input-to-output connection per clock cycle.
+ * All 25 input/output combinations are supported, including same-port paths.
+ *
+ * DATA:
+ *   Each data port carries one FLIT_W-bit flit.
+ *   Flits are copied unchanged; their contents are not interpreted here.
+ *
+ * CONTROL:
+ *   input_control  selects the source input using a one-hot mask.
+ *   output_control selects the destination output using a one-hot mask.
+ *   Bit PORT_N represents North, PORT_S represents South, and so on.
+ *   PORT_* parameters must be unique indices within 0..4.
+ *
+ * CLOCK AND RESET:
+ *   Outputs update on the rising edge of clk.
+ *   rst is synchronous, active-high, and takes priority over enable.
+ *   Reset clears all output registers and rdy. Apply reset before use.
+ *
+ * TRANSFER BEHAVIOUR:
+ *   With enable=1 and valid one-hot controls, the selected output captures
+ *   the selected input flit and rdy becomes 1.
+ *   Unselected outputs retain their previous values.
+ *   With enable=0, zero controls, or multi-hot controls, all outputs retain
+ *   their values and rdy becomes 0.
+ *   Back-to-back transfers are supported; rdy may remain high across them.
+ *
+ * INTEGRATION CAVEATS:
+ *   rdy is a registered transfer indicator, NOT a receiver-ready signal.
+ *   The surrounding logic must assert enable only when the input flit is
+ *   valid and the downstream path can accept the registered transfer.
+ *   There is no arbitration, route computation, credit tracking or FIFO
+ *   inside this module. Output data can be overwritten by a later transfer.
+ *   Retained output data must not be interpreted as a new packet.
+ *   Consumers must track the selected destination, aligned with the
+ *   registered output data and rdy; rdy alone does not identify that port.
+ *
+ * LIMITATION:
+ *   This interface selects one input/output pair globally. It does not
+ *   support multiple simultaneous connections like a parallel 5x5 crossbar.
+ */
+
+
+
 module crossbar #(
     parameter integer FLIT_W = 32,
 
