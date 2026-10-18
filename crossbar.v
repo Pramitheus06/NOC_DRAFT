@@ -46,7 +46,7 @@
 
 
 module crossbar #(
-    parameter integer FLIT_W = 32,
+    parameter integer FLIT_W = 34,
 
     parameter [2:0] PORT_N = 3'd1,
     parameter [2:0] PORT_S = 3'd2,
