@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module tb_crossbar;
-    parameter integer FLIT_W = 32;
+    parameter integer FLIT_W = 34;
     parameter [2:0] PORT_N = 3'd0, PORT_S = 3'd1,
                     PORT_E = 3'd2, PORT_W = 3'd3, PORT_L = 3'd4;
 
