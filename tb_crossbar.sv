@@ -8,7 +8,7 @@ module tb_crossbar;
     reg clk = 0;
     reg rst = 1;
     reg enable = 0;
-    reg [4:0] input_control = 0, output_control = 0;
+    reg [2:0] input_control = 0, output_control = 0;
     reg [FLIT_W-1:0] IN_DATA_N = 0, IN_DATA_S = 0,
                      IN_DATA_E = 0, IN_DATA_W = 0, IN_DATA_L = 0;
     wire [FLIT_W-1:0] OUT_DATA_N, OUT_DATA_S, OUT_DATA_E,
@@ -31,22 +31,22 @@ module tb_crossbar;
 
     always #5 clk = ~clk;
 
-    // Array positions below always mean N, S, E, W, L.
+    // Array positions always mean N, S, E, W, L.
     reg [FLIT_W-1:0] expected [0:4];
     reg expected_rdy;
     integer cycles = 0;
     integer seed = 32'h13579BDF;
     integer i, j, k;
-    reg [4:0] random_in, random_out;
+    reg [2:0] random_in, random_out;
 
-    function automatic [4:0] port_mask(input integer port_index);
-        case (port_index)
-            0: port_mask = 5'b00001 << PORT_N;
-            1: port_mask = 5'b00001 << PORT_S;
-            2: port_mask = 5'b00001 << PORT_E;
-            3: port_mask = 5'b00001 << PORT_W;
-            4: port_mask = 5'b00001 << PORT_L;
-            default: port_mask = 0;
+    function automatic [2:0] port_code(input integer p);
+        case (p)
+            0: port_code = PORT_N;
+            1: port_code = PORT_S;
+            2: port_code = PORT_E;
+            3: port_code = PORT_W;
+            4: port_code = PORT_L;
+            default: port_code = 3'd7;
         endcase
     endfunction
 
@@ -98,8 +98,8 @@ module tb_crossbar;
     task automatic step(
         input bit next_rst,
         input bit next_enable,
-        input [4:0] next_input_control,
-        input [4:0] next_output_control
+        input [2:0] next_input_control,
+        input [2:0] next_output_control
     );
         integer src, dst, p;
         begin
@@ -115,13 +115,13 @@ module tb_crossbar;
             IN_DATA_W = random_flit();
             IN_DATA_L = random_flit();
 
-            // A registered DUT must not respond before the rising edge.
             #1;
             check_outputs("before rising edge");
 
             @(posedge clk);
             cycles = cycles + 1;
             expected_rdy = 0;
+
             if (rst) begin
                 for (p = 0; p < 5; p = p + 1)
                     expected[p] = 0;
@@ -129,8 +129,8 @@ module tb_crossbar;
                 src = -1;
                 dst = -1;
                 for (p = 0; p < 5; p = p + 1) begin
-                    if (input_control === port_mask(p)) src = p;
-                    if (output_control === port_mask(p)) dst = p;
+                    if (input_control === port_code(p)) src = p;
+                    if (output_control === port_code(p)) dst = p;
                 end
                 if ((src >= 0) && (dst >= 0)) begin
                     expected[dst] = input_word(src);
@@ -138,7 +138,7 @@ module tb_crossbar;
                 end
             end
 
-            // Wait for nonblocking assignments to update the DUT outputs.
+            // Wait for nonblocking assignments to update DUT outputs.
             #1;
             check_outputs("after rising edge");
         end
@@ -153,38 +153,38 @@ module tb_crossbar;
         for (k = 0; k < 5; k = k + 1)
             expected[k] = 0;
 
-        step(1, 0, 0, 0);
+        step(1, 0, 3'd0, 3'd0);
 
         $display("Checking all 25 paths without idle cycles...");
         for (i = 0; i < 5; i = i + 1)
             for (j = 0; j < 5; j = j + 1)
-                step(0, 1, port_mask(i), port_mask(j));
+                step(0, 1, port_code(i), port_code(j));
 
         $display("Checking enable=0 and output retention...");
         for (i = 0; i < 5; i = i + 1)
-            step(0, 0, port_mask(i), port_mask(4-i));
+            step(0, 0, port_code(i), port_code(4-i));
 
         $display("Checking reset priority while enable=1...");
-        step(0, 1, port_mask(2), port_mask(1));
-        step(1, 1, port_mask(4), port_mask(0));
+        step(0, 1, port_code(2), port_code(1));
+        step(1, 1, port_code(4), port_code(0));
 
-        $display("Checking all 1024 control combinations...");
-        for (i = 0; i < 32; i = i + 1)
-            for (j = 0; j < 32; j = j + 1)
-                step(0, 1, i[4:0], j[4:0]);
+        $display("Checking all 64 control combinations...");
+        for (i = 0; i < 8; i = i + 1)
+            for (j = 0; j < 8; j = j + 1)
+                step(0, 1, i[2:0], j[2:0]);
 
         // Unknown controls must not accidentally produce a transfer.
-        step(0, 1, 5'bxxxxx, port_mask(0));
-        step(0, 1, port_mask(0), 5'bzzzzz);
+        step(0, 1, 3'bxxx, port_code(0));
+        step(0, 1, port_code(0), 3'bzzz);
 
         $display("Checking 250 randomized cycles...");
         for (k = 0; k < 250; k = k + 1) begin
             if ($urandom_range(0, 3) != 0) begin
-                random_in = port_mask($urandom_range(0, 4));
-                random_out = port_mask($urandom_range(0, 4));
+                random_in = port_code($urandom_range(0, 4));
+                random_out = port_code($urandom_range(0, 4));
             end else begin
-                random_in = $urandom_range(0, 31);
-                random_out = $urandom_range(0, 31);
+                random_in = $urandom_range(0, 7);
+                random_out = $urandom_range(0, 7);
             end
             step(($urandom_range(0, 31) == 0),
                  $urandom_range(0, 1), random_in, random_out);
